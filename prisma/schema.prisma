@@ -1,0 +1,283 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+enum UserRole {
+  SUPER_ADMIN
+  DOCTOR
+  RECEPTIONIST
+  CONTENT_MANAGER
+}
+
+enum PublishStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+  AUDIO
+  DOCUMENT
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+}
+
+enum ConsultationType {
+  IN_PERSON
+  VIDEO
+  PHONE
+}
+
+enum AccountTokenKind {
+  INVITATION
+  PASSWORD_RESET
+}
+
+model Tenant {
+  id String @id @default(cuid())
+  slug String @unique
+  name String
+  domain String? @unique
+  status String @default("ACTIVE")
+  template String @default("womens-health")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  users User[]
+  doctor Doctor?
+  settings SiteSettings?
+  theme Theme?
+  pages Page[]
+  media Media[]
+  services Service[]
+  testimonials Testimonial[]
+  faqs Faq[]
+  articles Article[]
+  appointments Appointment[]
+  availability Availability[]
+  navigation NavigationItem[]
+  accountTokens AccountToken[]
+  auditLogs AuditLog[]
+}
+model User {
+  id String @id @default(cuid())
+  tenantId String?
+  email String @unique
+  name String?
+  role UserRole
+  passwordHash String
+  sessions Session[]
+  auditLogs AuditLog[]
+  tenant Tenant? @relation(fields:[tenantId], references:[id], onDelete:Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AccountToken {
+  id String @id @default(cuid())
+  tokenHash String @unique
+  kind AccountTokenKind
+  email String
+  name String?
+  role UserRole?
+  tenantId String?
+  createdById String?
+  expiresAt DateTime
+  usedAt DateTime?
+  createdAt DateTime @default(now())
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  @@index([email, kind, expiresAt])
+  @@index([tenantId, createdAt])
+}
+
+model LoginThrottle {
+  key String @id
+  failures Int @default(0)
+  windowStartedAt DateTime @default(now())
+  blockedUntil DateTime?
+  updatedAt DateTime @updatedAt
+  @@index([updatedAt])
+}
+
+model AuditLog {
+  id String @id @default(cuid())
+  tenantId String?
+  actorId String?
+  action String
+  targetType String
+  targetId String?
+  metadata Json?
+  createdAt DateTime @default(now())
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  @@index([tenantId, createdAt])
+  @@index([actorId, createdAt])
+  @@index([action, createdAt])
+}
+model Session {
+  id String @id @default(cuid())
+  tokenHash String @unique
+  userId String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, expiresAt])
+  @@index([expiresAt])
+}
+model Doctor {
+  id String @id @default(cuid())
+  tenantId String @unique
+  name String
+  slug String @unique
+  title String?
+  bio String?
+  qualifications String[]
+  specialties String[]
+  experienceYears Int?
+  profileMediaId String?
+  tenant Tenant @relation(fields:[tenantId], references:[id], onDelete:Cascade)
+}
+model SiteSettings {
+  id String @id @default(cuid())
+  tenantId String @unique
+  siteTitle String?
+  tagline String?
+  phone String?
+  email String?
+  address String?
+  appointmentCta String @default("Book Appointment")
+  logoMediaId String?
+  faviconMediaId String?
+  tenant Tenant @relation(fields:[tenantId], references:[id], onDelete:Cascade)
+}
+model Theme {
+  id String @id @default(cuid())
+  tenantId String @unique
+  name String
+  tokens Json
+  tenant Tenant @relation(fields:[tenantId], references:[id], onDelete:Cascade)
+}
+model Page {
+  id String @id @default(cuid())
+  tenantId String
+  slug String
+  title String
+  status PublishStatus @default(DRAFT)
+  seoTitle String?
+  seoDescription String?
+  blocks Json
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenant Tenant @relation(fields:[tenantId], references:[id], onDelete:Cascade)
+  @@unique([tenantId, slug])
+}
+model Media {
+  id String @id @default(cuid())
+  tenantId String
+  type MediaType
+  filename String
+  storageKey String
+  mimeType String
+  sizeBytes Int
+  width Int?
+  height Int?
+  altText String?
+  caption String?
+  transcript String?
+  createdAt DateTime @default(now())
+  tenant Tenant @relation(fields:[tenantId], references:[id], onDelete:Cascade)
+  @@index([tenantId, type])
+}
+model Service {
+  id String @id @default(cuid())
+  tenantId String
+  slug String
+  name String
+  shortDescription String?
+  description String?
+  durationMinutes Int?
+  price Int?
+  active Boolean @default(true)
+  tenant Tenant @relation(fields:[tenantId], references:[id], onDelete:Cascade)
+  @@unique([tenantId, slug])
+}
+model Testimonial {
+  id String @id @default(cuid())
+  tenantId String
+  name String
+  quote String
+  rating Int?
+  published Boolean @default(true)
+  tenant Tenant @relation(fields:[tenantId], references:[id], onDelete:Cascade)
+}
+model Faq {
+  id String @id @default(cuid())
+  tenantId String
+  question String
+  answer String
+  sortOrder Int @default(0)
+  published Boolean @default(true)
+  tenant Tenant @relation(fields:[tenantId], references:[id], onDelete:Cascade)
+}
+model Article {
+  id String @id @default(cuid())
+  tenantId String
+  slug String
+  title String
+  excerpt String?
+  content String
+  status PublishStatus @default(DRAFT)
+  publishedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenant Tenant @relation(fields:[tenantId], references:[id], onDelete:Cascade)
+  @@unique([tenantId, slug])
+}
+model NavigationItem {
+  id String @id @default(cuid())
+  tenantId String
+  label String
+  href String
+  sortOrder Int @default(0)
+  visible Boolean @default(true)
+  tenant Tenant @relation(fields:[tenantId], references:[id], onDelete:Cascade)
+}
+model Availability {
+  id String @id @default(cuid())
+  tenantId String
+  weekday Int
+  startMinute Int
+  endMinute Int
+  breakStart Int?
+  breakEnd Int?
+  active Boolean @default(true)
+  tenant Tenant @relation(fields:[tenantId], references:[id], onDelete:Cascade)
+}
+model Appointment {
+  id String @id @default(cuid())
+  tenantId String
+  serviceId String?
+  patientName String
+  patientPhone String
+  patientEmail String?
+  startsAt DateTime
+  endsAt DateTime
+  consultationType ConsultationType
+  status AppointmentStatus @default(PENDING)
+  notes String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenant Tenant @relation(fields:[tenantId], references:[id], onDelete:Cascade)
+  @@index([tenantId, startsAt])
+}
